@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Capture Lessons Learned",
+  "description": "When an agent session ends, review the conversation for mistakes, surprises, workarounds, or useful patterns discovered. Append any new lessons to .kiro/steering/memory.md, avoiding duplicates of what's already there.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review this session for lessons learned. Look for: environment quirks, failed approaches that were retried differently, useful patterns discovered, subagent issues, testing gotchas, or anything that would help future sessions go smoother. Read .kiro/steering/memory.md, then append ONLY genuinely new observations under the appropriate section (or create a new section if needed). Do not duplicate existing entries. If nothing new was learned this session, do nothing."
+  }
+}
