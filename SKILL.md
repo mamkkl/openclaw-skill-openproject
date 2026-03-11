@@ -47,11 +47,22 @@ Use `python scripts/openproject_cli.py <command> [args]`.
   - Prints confirmation including WP ID and resulting status.
 - `get-work-package --id <wp_id>`
   - Fetch full details for a single work package (status/type/priority/assignee/dates/description).
+  - Displays a comment count showing how many user comments exist on the work package.
 - `update-work-package --id <wp_id> [--subject ...] [--description ...] [--status ...] [--assignee ...] [--priority ...] [--type ...] [--start-date YYYY-MM-DD] [--due-date YYYY-MM-DD]`
   - Patch one or more mutable fields in a single call using transition-safe status resolution.
 - `add-comment --id <wp_id> --comment "..."`
   - Best-effort comment creation using OpenProject API v3.
   - Returns a clear message when endpoint behavior differs by version/config.
+- `list-comments --id <wp_id> [--all] [--author ...] [--limit N]`
+  - List comments and activity history for a work package.
+  - By default shows only activities with user comments, ordered oldest to newest.
+  - `--all` includes field-change-only activities.
+  - `--author` filters by author name (case-insensitive substring match).
+  - `--limit N` shows only the N most recent entries.
+- `update-comment --id <activity_id> --comment "..."`
+  - Update the text of an existing comment (activity) by its activity ID.
+  - The `--id` argument must be a positive integer (the activity ID, not the work package ID).
+  - Returns a confirmation message on success.
 - `list-statuses`
   - List available work package statuses.
 - `list-types [--project <id|identifier>]`
@@ -121,6 +132,14 @@ playwright install chromium
 
 - Use `list-statuses`, `list-types`, `list-priorities`, and `list-users` before creating/updating when values are uncertain.
 - Prefer explicit metadata lookups over guesswork when type/status/priority names vary between OpenProject instances.
+
+### Comments and activity
+
+- Use `list-comments` to review discussion history on a work package.
+- Use `--author` to find comments from a specific person.
+- Use `--all` when field change history is relevant (e.g., tracking status transitions).
+- Use `add-comment` to contribute to work package discussions.
+- Use `update-comment` to edit an existing comment when correcting mistakes or adding clarifications.
 
 ### Relations
 

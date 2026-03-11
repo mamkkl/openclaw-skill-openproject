@@ -185,6 +185,8 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `update-work-package-status` | Transition a work package status | `--id`, `--status` |
 | `update-work-package` | Update multiple work package fields | `--id` plus any of `--subject`, `--description`, `--status`, `--assignee`, `--priority`, `--type`, `--start-date`, `--due-date` |
 | `add-comment` | Add note/comment to work package | `--id`, `--comment` |
+| `list-comments` | List comments on a work package | `--id`, optional `--all`, `--author`, `--limit` |
+| `update-comment` | Update text of an existing comment | `--id` (activity ID), `--comment` |
 | `list-statuses` | List available statuses | none |
 | `list-types` | List available types | optional `--project` |
 | `list-priorities` | List available priorities | none |
@@ -220,6 +222,8 @@ python3 scripts/openproject_cli.py update-work-package \
   --due-date 2026-03-05
 
 python3 scripts/openproject_cli.py add-comment --id 123 --comment "Reviewed scope with platform team."
+python3 scripts/openproject_cli.py list-comments --id 123
+python3 scripts/openproject_cli.py update-comment --id 456 --comment "Corrected: rollout date is March 15."
 python3 scripts/openproject_cli.py list-statuses
 python3 scripts/openproject_cli.py list-types --project know-malawi
 python3 scripts/openproject_cli.py list-priorities

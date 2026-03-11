@@ -869,6 +869,16 @@ class OpenProjectClient:
 
         return result
 
+    def update_comment(self, activity_id: int, comment: str) -> Dict[str, Any]:
+        """Update the comment text of an existing activity (journal entry)."""
+        return self._request(
+            "PATCH",
+            f"/activities/{activity_id}",
+            payload={"comment": {"raw": comment}},
+            expected_statuses=(200,),
+        )
+
+
     def get_activities(self, work_package_id: int, limit: int = 200) -> List[Dict[str, Any]]:
         """Fetch activities (journal entries) for a work package.
 
@@ -931,6 +941,17 @@ def nested_get(data: Dict[str, Any], keys: Iterable[str], default: Any = "") -> 
             return default
         current = current[key]
     return current
+
+def positive_int(value: str) -> int:
+    """Argparse *type* function that accepts only positive integers."""
+    try:
+        ivalue = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a valid integer")
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a positive integer")
+    return ivalue
+
 
 
 def get_default_project() -> str:
@@ -1508,6 +1529,17 @@ def command_add_comment(args: argparse.Namespace) -> None:
     print(f"Added comment to work package #{args.id}.")
     maybe_print_json(updated, args.debug_json)
 
+
+def command_update_comment(args: argparse.Namespace) -> None:
+    """CLI handler for the update-comment subcommand."""
+    if not args.comment or not args.comment.strip():
+        raise OpenProjectError("Comment text must not be empty.")
+    client = build_client_from_env()
+    result = client.update_comment(args.id, args.comment)
+    print(f"Updated comment on activity #{args.id}.")
+    maybe_print_json(result, args.debug_json)
+
+
 def command_list_comments(args: argparse.Namespace) -> None:
     """CLI handler for the list-comments subcommand."""
     client = build_client_from_env()
@@ -1917,6 +1949,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show only the N most recent comments.",
     )
     parser_list_comments.set_defaults(func=command_list_comments)
+
+    parser_update_comment = subparsers.add_parser(
+        "update-comment",
+        help="Update the text of an existing comment.",
+        description="Edit the comment text of an activity (journal entry) by its activity ID.",
+    )
+    parser_update_comment.add_argument(
+        "--id", type=positive_int, required=True, help="Activity ID."
+    )
+    parser_update_comment.add_argument(
+        "--comment", required=True, help="New comment text."
+    )
+    parser_update_comment.set_defaults(func=command_update_comment)
 
     parser_get_wp = subparsers.add_parser(
         "get-work-package",

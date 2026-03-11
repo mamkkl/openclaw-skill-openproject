@@ -30,6 +30,7 @@ Observations from building and implementing specs in this project. Use these to 
 - Subagents sometimes create code eagerly in earlier tasks. Always check if code already exists before delegating a task — avoids duplicates.
 - Watch for nested class bugs: a subagent once placed a test class inside another test class, making it invisible to `unittest discover`. Always verify test discovery count after adding tests.
 - Keep subagent prompts specific: include exact line numbers, function signatures, and the surrounding code context. Vague prompts lead to misplaced code.
+- For parser registration tasks, read the full `build_parser()` function before delegating so you can specify exact insertion points (e.g., "after the list-comments block, before get-work-package"). This eliminates misplacement entirely.
 
 ## Spec Workflow
 
@@ -51,3 +52,20 @@ Observations from building and implementing specs in this project. Use these to 
 
 - Always delete temp files created during verification (e.g., `_verify.py`). Don't leave artifacts in the project root.
 - After a trail run, verify the test discovery count matches expectations (e.g., 19 unit tests + 8 property tests for the comments feature).
+
+## Post-Implementation Checklist
+
+- After adding a new CLI command, always update `SKILL.md`: add the command to Supported Operations, update any modified command descriptions, and add agent behavior guidance if applicable.
+- Check if `README.md` also needs corresponding updates (per steering rule in `structure.md`).
+- When adding a new command to README's Command Reference table, audit the full table for previously missing commands. The `list-comments` command was missing from the table despite being implemented in an earlier feature — caught only when adding `update-comment`.
+
+## API Verification
+
+- Always verify OpenProject API endpoint availability against the official docs (https://www.openproject.org/docs/api/endpoints/) before writing requirements that depend on them. Don't assume endpoints exist from memory alone.
+- Check `_links` on API resource examples — OpenProject uses HAL hypermedia controls (e.g., `_links.update` with `method: "patch"`) to advertise available operations. The presence of these links is permission-dependent.
+- Community forums may report version-specific bugs (e.g., PATCH on activities returning 500 in some versions). Requirements should account for graceful error handling on endpoints that may behave inconsistently across OpenProject versions.
+
+## Spec Workflow — Multi-Phase Delegation
+
+- When the user asks to "create tasks" but the design document doesn't exist yet, create design first then tasks in a single subagent call. Tell the subagent explicitly to proceed through both phases — this avoids an extra round-trip back to the user.
+- Include "The user explicitly asked for tasks to be created" in the subagent prompt so it knows to continue past the design phase without pausing for user confirmation.
