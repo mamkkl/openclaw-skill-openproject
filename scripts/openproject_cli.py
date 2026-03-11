@@ -874,7 +874,7 @@ class OpenProjectClient:
         return self._request(
             "PATCH",
             f"/activities/{activity_id}",
-            payload={"comment": {"raw": comment}},
+            payload={"comment": comment},
             expected_statuses=(200,),
         )
 

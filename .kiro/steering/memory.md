@@ -64,6 +64,7 @@ Observations from building and implementing specs in this project. Use these to 
 - Always verify OpenProject API endpoint availability against the official docs (https://www.openproject.org/docs/api/endpoints/) before writing requirements that depend on them. Don't assume endpoints exist from memory alone.
 - Check `_links` on API resource examples — OpenProject uses HAL hypermedia controls (e.g., `_links.update` with `method: "patch"`) to advertise available operations. The presence of these links is permission-dependent.
 - Community forums may report version-specific bugs (e.g., PATCH on activities returning 500 in some versions). Requirements should account for graceful error handling on endpoints that may behave inconsistently across OpenProject versions.
+- PATCH `/api/v3/activities/{id}` with `{"comment": {"raw": "..."}}` returned 400 "comment is invalid" on a real instance. The payload format may vary by OpenProject version — always test write endpoints against the actual target instance, not just mocks. Consider fetching the official API spec or testing with `--debug-json` before assuming a payload shape is correct.
 
 ## Spec Workflow — Multi-Phase Delegation
 

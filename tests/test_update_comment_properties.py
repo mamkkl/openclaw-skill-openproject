@@ -57,7 +57,7 @@ def test_property1_patch_request_construction_and_return(activity_id, comment):
     mock_req.assert_called_once_with(
         "PATCH",
         f"/activities/{activity_id}",
-        payload={"comment": {"raw": comment}},
+        payload={"comment": comment},
         expected_statuses=(200,),
     )
     assert result is sentinel

@@ -53,7 +53,7 @@ sequenceDiagram
 
 Client method that sends the PATCH request. Mirrors the simplicity of `add_comment()` but targets a specific activity rather than a work package.
 
-- Calls `self._request("PATCH", f"/activities/{activity_id}", payload={"comment": {"raw": comment}}, expected_statuses=(200,))`
+- Calls `self._request("PATCH", f"/activities/{activity_id}", payload={"comment": comment}, expected_statuses=(200,))`
 - Returns the updated Activity dict on success
 - Relies on `_request()` for error propagation — 403/404/other errors raise `OpenProjectError` with status code and detail automatically
 
