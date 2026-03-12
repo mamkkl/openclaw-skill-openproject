@@ -889,6 +889,41 @@ class OpenProjectClient:
             f"/work_packages/{work_package_id}/activities", limit=limit
         )
 
+    def list_notifications(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetch in-app notifications for the authenticated user.
+
+        Returns a list of Notification dicts from the API.
+        """
+        return self._collect_collection("/notifications", limit=limit)
+
+    def get_notification(self, notification_id: int) -> Dict[str, Any]:
+        """Fetch a single notification by ID."""
+        return self._request(
+            "GET", f"/notifications/{notification_id}", expected_statuses=(200,)
+        )
+
+    def read_notification(self, notification_id: int) -> Dict[str, Any]:
+        """Mark a notification as read (POST read_ian)."""
+        return self._request(
+            "POST",
+            f"/notifications/{notification_id}/read_ian",
+            expected_statuses=(204,),
+        )
+
+    def unread_notification(self, notification_id: int) -> Dict[str, Any]:
+        """Mark a notification as unread (POST unread_ian)."""
+        return self._request(
+            "POST",
+            f"/notifications/{notification_id}/unread_ian",
+            expected_statuses=(204,),
+        )
+
+    def read_all_notifications(self) -> Dict[str, Any]:
+        """Mark all notifications as read (POST read_ian on collection)."""
+        return self._request(
+            "POST", "/notifications/read_ian", expected_statuses=(204,)
+        )
+
 
 def extract_error_message(response: requests.Response) -> str:
     """Extract a readable error message from an OpenProject error payload."""
@@ -1140,6 +1175,21 @@ def filter_activities_by_author(activities: List[Dict[str, Any]], author_query: 
     needle = author_query.lower()
     return [a for a in activities if needle in link_title(a, "user").lower()]
 
+def filter_notifications(
+    notifications: List[Dict[str, Any]],
+    reason: Optional[str] = None,
+    unread_only: bool = False,
+) -> List[Dict[str, Any]]:
+    """Apply client-side reason and read-status filtering to notifications."""
+    filtered = notifications
+    if reason:
+        reason_lower = reason.lower()
+        filtered = [n for n in filtered if str(n.get("reason", "")).lower() == reason_lower]
+    if unread_only:
+        filtered = [n for n in filtered if not n.get("readIAN", True)]
+    return filtered
+
+
 def format_activity(activity: Dict[str, Any], show_changes: bool = False) -> str:
     """Format a single activity for terminal display.
 
@@ -1313,6 +1363,45 @@ def print_relations(relations: List[Dict[str, Any]]) -> None:
         to_wp = truncate(link_title(relation, "to", "-"), 13)
         lag = str(relation.get("lag", "-"))
         print(f"{relation_id:<4}  {relation_type:<10}  {from_wp:<13}  {to_wp:<13}  {lag}")
+
+def print_notifications(notifications: List[Dict[str, Any]]) -> None:
+    """Print notification rows in a compact table."""
+    if not notifications:
+        print("No notifications found.")
+        return
+
+    print("ID      Reason        Resource Subject                      Project              Read  Created")
+    print("------  ------------  -----------------------------------  -------------------  ----  ----------")
+    for n in notifications:
+        nid = str(n.get("id", "?"))
+        reason = truncate(str(n.get("reason", "-")), 12)
+        subject = truncate(link_title(n, "resource", "-"), 35)
+        project = truncate(link_title(n, "project", "-"), 19)
+        read = "Yes" if n.get("readIAN", False) else "No"
+        created = format_date(str(n.get("createdAt", "")))
+        print(f"{nid:<6}  {reason:<12}  {subject:<35}  {project:<19}  {read:<4}  {created}")
+
+
+def print_notification_detail(notification: Dict[str, Any]) -> None:
+    """Print detailed fields for a single notification."""
+    nid = notification.get("id", "?")
+    reason = str(notification.get("reason", "-"))
+    read = "Yes" if notification.get("readIAN", False) else "No"
+    created = format_date(str(notification.get("createdAt", "")))
+    resource_subject = link_title(notification, "resource", "-")
+    project = link_title(notification, "project", "-")
+    resource_href = nested_get(notification, ("_links", "resource", "href"), "")
+    resource_id = extract_numeric_id_from_href(str(resource_href), "work_packages") if resource_href else None
+
+    print(f"Notification #{nid}")
+    print(f"Reason: {reason}")
+    print(f"Read: {read}")
+    print(f"Created: {created}")
+    print(f"Resource: {resource_subject}")
+    if resource_id is not None:
+        print(f"Resource ID: {resource_id}")
+    print(f"Project: {project}")
+
 
 
 def print_wiki_pages(project_identifier: str, pages: List[Dict[str, Any]]) -> None:
@@ -1840,6 +1929,51 @@ def command_log_decision(args: argparse.Namespace) -> None:
     print(f"Created decision log: {written_path}")
 
 
+def command_list_notifications(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    notifications = client.list_notifications()
+    raw_data = notifications
+    notifications = filter_notifications(
+        notifications, reason=getattr(args, "reason", None), unread_only=getattr(args, "unread_only", False)
+    )
+    notifications.sort(key=lambda n: n.get("createdAt", ""), reverse=True)
+    if hasattr(args, "limit") and args.limit is not None:
+        notifications = notifications[: args.limit]
+    if notifications:
+        print_notifications(notifications)
+    else:
+        print("No notifications found.")
+    maybe_print_json(raw_data, args.debug_json)
+
+
+def command_get_notification(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    notification = client.get_notification(args.id)
+    print_notification_detail(notification)
+    maybe_print_json(notification, args.debug_json)
+
+
+def command_read_notification(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    result = client.read_notification(args.id)
+    print(f"Marked notification #{args.id} as read.")
+    maybe_print_json(result, args.debug_json)
+
+
+def command_unread_notification(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    result = client.unread_notification(args.id)
+    print(f"Marked notification #{args.id} as unread.")
+    maybe_print_json(result, args.debug_json)
+
+
+def command_read_all_notifications(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    result = client.read_all_notifications()
+    print("All notifications marked as read.")
+    maybe_print_json(result, args.debug_json)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser and subcommands."""
     parser = argparse.ArgumentParser(
@@ -2171,6 +2305,66 @@ def build_parser() -> argparse.ArgumentParser:
     parser_decision.add_argument("--impact", help="Optional impact notes.")
     parser_decision.add_argument("--followup", help="Optional follow-up actions.")
     parser_decision.set_defaults(func=command_log_decision)
+
+    # -- Notification commands --
+
+    parser_list_notif = subparsers.add_parser(
+        "list-notifications",
+        help="List in-app notifications.",
+        description="Fetch and display notifications for the authenticated user.",
+    )
+    parser_list_notif.add_argument(
+        "--reason",
+        help="Filter by notification reason (e.g., mentioned, assigned).",
+    )
+    parser_list_notif.add_argument(
+        "--unread-only",
+        action="store_true",
+        help="Show only unread notifications.",
+    )
+    parser_list_notif.add_argument(
+        "--limit",
+        type=positive_int,
+        help="Maximum number of notifications to display.",
+    )
+    parser_list_notif.set_defaults(func=command_list_notifications)
+
+    parser_get_notif = subparsers.add_parser(
+        "get-notification",
+        help="Get details for a single notification.",
+        description="Fetch and print detailed fields for one notification.",
+    )
+    parser_get_notif.add_argument(
+        "--id", type=positive_int, required=True, help="Notification ID."
+    )
+    parser_get_notif.set_defaults(func=command_get_notification)
+
+    parser_read_notif = subparsers.add_parser(
+        "read-notification",
+        help="Mark a notification as read.",
+        description="Send a read acknowledgement for a notification.",
+    )
+    parser_read_notif.add_argument(
+        "--id", type=positive_int, required=True, help="Notification ID."
+    )
+    parser_read_notif.set_defaults(func=command_read_notification)
+
+    parser_unread_notif = subparsers.add_parser(
+        "unread-notification",
+        help="Mark a notification as unread.",
+        description="Revert a notification to unread status.",
+    )
+    parser_unread_notif.add_argument(
+        "--id", type=positive_int, required=True, help="Notification ID."
+    )
+    parser_unread_notif.set_defaults(func=command_unread_notification)
+
+    parser_read_all_notif = subparsers.add_parser(
+        "read-all-notifications",
+        help="Mark all notifications as read.",
+        description="Mark all in-app notifications as read in one operation.",
+    )
+    parser_read_all_notif.set_defaults(func=command_read_all_notifications)
 
     return parser
 

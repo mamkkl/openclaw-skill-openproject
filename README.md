@@ -195,6 +195,11 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `create-relation` | Create a relation between work packages | `--from-id`, `--to-id`, `--type`, optional `--description`, `--lag` |
 | `weekly-summary` | Generate compact markdown summary | `--project`, `--output` |
 | `log-decision` | Write decision log markdown file | `--project`, `--title`, `--decision`, optional context fields |
+| `list-notifications` | List in-app notifications | optional `--reason`, `--unread-only`, `--limit` |
+| `get-notification` | Get details for a single notification | `--id` |
+| `read-notification` | Mark a notification as read | `--id` |
+| `unread-notification` | Mark a notification as unread | `--id` |
+| `read-all-notifications` | Mark all notifications as read | none |
 
 Note: the CLI may still contain legacy wiki subcommands for compatibility experiments, but they are not part of the supported skill command set.
 

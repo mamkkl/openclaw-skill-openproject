@@ -1,0 +1,35 @@
+# Tasks: notifications
+
+- [x] 1 Implement client methods on OpenProjectClient
+  - [x] 1.1 Add `list_notifications(self, limit: int = 200) -> List[Dict[str, Any]]` method after `get_activities()` in `scripts/openproject_cli.py`
+  - [x] 1.2 Add `get_notification(self, notification_id: int) -> Dict[str, Any]` method after `list_notifications()`
+  - [x] 1.3 Add `read_notification(self, notification_id: int) -> Dict[str, Any]` method after `get_notification()`
+  - [x] 1.4 Add `unread_notification(self, notification_id: int) -> Dict[str, Any]` method after `read_notification()`
+  - [x] 1.5 Add `read_all_notifications(self) -> Dict[str, Any]` method after `unread_notification()`
+- [x] 2 Implement filter and formatter functions
+  - [x] 2.1 Add `filter_notifications(notifications, reason=None, unread_only=False)` near `filter_work_packages()` / `filter_users()`
+  - [x] 2.2 Add `print_notifications(notifications)` tabular formatter near `print_work_packages()`
+  - [x] 2.3 Add `print_notification_detail(notification)` detail formatter after `print_notifications()`
+- [x] 3 Implement command functions and parser registration
+  - [x] 3.1 Add `command_list_notifications(args)` after `command_log_decision()` and before `build_parser()`
+  - [x] 3.2 Add `command_get_notification(args)` after `command_list_notifications()`
+  - [x] 3.3 Add `command_read_notification(args)` after `command_get_notification()`
+  - [x] 3.4 Add `command_unread_notification(args)` after `command_read_notification()`
+  - [x] 3.5 Add `command_read_all_notifications(args)` after `command_unread_notification()`
+  - [x] 3.6 Register all five notification subparsers in `build_parser()` after the `log-decision` block and before `return parser`
+- [x] 4 Checkpoint: syntax check and manual smoke test
+- [x] 5 Write unit tests
+  - [x] 5.1 Create `tests/test_notifications.py` with unit tests for client methods, filter function, formatter functions, command functions, parser registration, and error propagation
+- [x] 6 Write property tests
+  - [x] 6.1 Create `tests/test_notifications_properties.py` with Property 1 (list_notifications uses _collect_collection with correct path)
+  - [x] 6.2 Add Property 2 (client methods construct correct requests)
+  - [x] 6.3 Add Property 3 (read/unread confirmation messages include notification ID)
+  - [x] 6.4 Add Property 4 (filter_notifications correctly filters by reason and unread_only)
+  - [x] 6.5 Add Property 5 (list formatter output contains required fields)
+  - [x] 6.6 Add Property 6 (detail formatter output contains required fields)
+  - [x] 6.7 Add Property 7 (limit constrains output size)
+  - [x] 6.8 Add Property 8 (notifications are sorted by createdAt descending)
+- [x] 7 Checkpoint: run full test suite (unittest + pytest)
+- [x] 8 Update documentation
+  - [x] 8.1 Add notification commands to SKILL.md Supported Operations and agent behavior guidance
+  - [x] 8.2 Update README.md Command Reference table with all five notification commands

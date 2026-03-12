@@ -80,6 +80,20 @@ Use `python scripts/openproject_cli.py <command> [args]`.
   - Writes output to provided path or default `project-knowledge/status/YYYY-MM-DD-weekly-status.md`.
 - `log-decision --project <id|identifier> --title "..." --decision "..." [--context ...] [--impact ...] [--followup ...]`
   - Create a decision markdown entry in `project-knowledge/decisions`.
+- `list-notifications [--reason ...] [--unread-only] [--limit N]`
+  - List in-app notifications for the authenticated user.
+  - Displays ID, reason, resource subject, project, read status, and creation date.
+  - `--reason` filters by notification reason (e.g., `mentioned`, `assigned`).
+  - `--unread-only` shows only unread notifications.
+  - `--limit N` caps the number of displayed notifications.
+- `get-notification --id <notification_id>`
+  - Fetch and display full details for a single notification.
+- `read-notification --id <notification_id>`
+  - Mark a notification as read. Prints confirmation with notification ID.
+- `unread-notification --id <notification_id>`
+  - Mark a notification as unread. Prints confirmation with notification ID.
+- `read-all-notifications`
+  - Mark all notifications as read in one operation.
 
 Wiki commands may exist in the CLI for legacy compatibility, but they are out of scope for this skill and should not be used in normal workflows.
 
@@ -169,6 +183,16 @@ playwright install chromium
 - Use `log-decision` for durable decisions.
 - Capture context, decision, impact, and follow-up actions.
 - Store files under `project-knowledge/decisions/` with date + slug naming.
+
+### Notifications
+
+- Use `list-notifications` to check for events requiring attention.
+- Use `--reason` to focus on specific notification types (e.g., `mentioned`, `assigned`).
+- Use `--unread-only` to see only unacknowledged notifications.
+- Use `get-notification` to inspect a specific notification's details.
+- Use `read-notification` to acknowledge a notification after reviewing it.
+- Use `unread-notification` to flag a notification for later follow-up.
+- Use `read-all-notifications` to clear notification backlog in bulk.
 
 ## Output Style
 

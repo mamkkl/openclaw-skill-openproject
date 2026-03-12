@@ -7,6 +7,7 @@ Observations from building and implementing specs in this project. Use these to 
 - This is a Windows machine. Use `python` not `python3`. PowerShell is the shell — avoid bash-isms like `tail`, `&&`, and inline single-quote strings in `-c` flags.
 - For complex inline Python checks, write a temp `.py` file and run it instead of fighting PowerShell quoting.
 - `unittest` on PowerShell reports stderr even on success (exit code 1 with "OK" output). Check the "OK" / "FAILED" line, not the exit code alone.
+- Git commit messages with escaped double quotes (`\"`) fail in PowerShell. Use simple single-line messages or avoid special characters in commit messages.
 
 ## Testing Patterns
 
@@ -64,7 +65,12 @@ Observations from building and implementing specs in this project. Use these to 
 - Always verify OpenProject API endpoint availability against the official docs (https://www.openproject.org/docs/api/endpoints/) before writing requirements that depend on them. Don't assume endpoints exist from memory alone.
 - Check `_links` on API resource examples — OpenProject uses HAL hypermedia controls (e.g., `_links.update` with `method: "patch"`) to advertise available operations. The presence of these links is permission-dependent.
 - Community forums may report version-specific bugs (e.g., PATCH on activities returning 500 in some versions). Requirements should account for graceful error handling on endpoints that may behave inconsistently across OpenProject versions.
-- PATCH `/api/v3/activities/{id}` with `{"comment": {"raw": "..."}}` returned 400 "comment is invalid" on a real instance. The payload format may vary by OpenProject version — always test write endpoints against the actual target instance, not just mocks. Consider fetching the official API spec or testing with `--debug-json` before assuming a payload shape is correct.
+- PATCH `/api/v3/activities/{id}` expects `{"comment": "plain string"}` — NOT the formattable object `{"comment": {"raw": "..."}}`. The formattable object is what the API *returns*, but the PATCH request body wants a plain string. Sending the object format returns 400 "comment is invalid". Discovered via live testing with multiple payload variants.
+- When debugging API payload issues, write a temp script that tries multiple payload formats in one run (plain string, formattable object, with/without version, different content types). This is faster than iterating one-at-a-time.
+
+## Property Test Gotchas
+
+- `from_regex` strategies that allow trailing spaces (e.g., `r"[A-Za-z][A-Za-z0-9 ]{0,15}"`) can generate values like `'A '`. When the code under test strips or truncates these values (e.g., `link_title` returns stripped strings), assertions comparing the raw generated value against output will fail. Fix: use `.strip()` on the expected value in assertions, or tighten the regex to exclude trailing spaces (e.g., end with a non-space character class).
 
 ## Spec Workflow — Multi-Phase Delegation
 
