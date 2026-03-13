@@ -191,6 +191,7 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `list-types` | List available types | optional `--project` |
 | `list-priorities` | List available priorities | none |
 | `list-users` | List visible users | optional `--query`, `--limit` |
+| `list-project-members` | List project members with roles | `--project`, optional `--query`, `--limit` |
 | `list-relations` | List relations for one work package | `--id`, optional `--limit` |
 | `create-relation` | Create a relation between work packages | `--from-id`, `--to-id`, `--type`, optional `--description`, `--lag` |
 | `weekly-summary` | Generate compact markdown summary | `--project`, `--output` |
@@ -233,6 +234,8 @@ python3 scripts/openproject_cli.py list-statuses
 python3 scripts/openproject_cli.py list-types --project know-malawi
 python3 scripts/openproject_cli.py list-priorities
 python3 scripts/openproject_cli.py list-users --query "alice"
+python3 scripts/openproject_cli.py list-project-members --project know-malawi
+python3 scripts/openproject_cli.py list-project-members --project know-malawi --query "alice"
 python3 scripts/openproject_cli.py list-relations --id 123
 python3 scripts/openproject_cli.py create-relation --from-id 123 --to-id 140 --type blocks --lag 1
 

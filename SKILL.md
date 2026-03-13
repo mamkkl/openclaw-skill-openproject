@@ -71,6 +71,12 @@ Use `python scripts/openproject_cli.py <command> [args]`.
   - List available priority values.
 - `list-users [--query ...] [--limit N]`
   - List visible users and optionally filter by name/login/id.
+- `list-project-members --project <id|identifier> [--query ...] [--limit N]`
+  - List members of a specific project with their assigned roles.
+  - Uses the `/api/v3/memberships` endpoint filtered by project, which is accessible to users with project membership visibility (unlike `list-users` which requires global permissions).
+  - Displays member ID, name, and comma-separated role names.
+  - `--query` filters by member name (case-insensitive substring match).
+  - `--limit N` caps the number of memberships fetched (default: 200).
 - `list-relations --id <wp_id> [--limit N]`
   - List relations for one work package.
 - `create-relation --from-id <wp_id> --to-id <wp_id> --type <relation_type> [--description ...] [--lag N]`
@@ -146,6 +152,7 @@ playwright install chromium
 
 - Use `list-statuses`, `list-types`, `list-priorities`, and `list-users` before creating/updating when values are uncertain.
 - Prefer explicit metadata lookups over guesswork when type/status/priority names vary between OpenProject instances.
+- Use `list-project-members` to see who is on a project team and their roles. Prefer this over `list-users` when you only need project-scoped team visibility, as it does not require global user-list permissions.
 
 ### Comments and activity
 

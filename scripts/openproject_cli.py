@@ -889,6 +889,17 @@ class OpenProjectClient:
             f"/work_packages/{work_package_id}/activities", limit=limit
         )
 
+    def get_project_memberships(self, project_id: int, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetch memberships for a project.
+
+        Returns a list of Membership dicts filtered by the given project ID.
+        """
+        return self._collect_collection(
+            "/memberships",
+            params={"filters": json.dumps([{"project": {"operator": "=", "values": [str(project_id)]}}])},
+            limit=limit,
+        )
+
     def list_notifications(self, limit: int = 200) -> List[Dict[str, Any]]:
         """Fetch in-app notifications for the authenticated user.
 
@@ -1170,6 +1181,13 @@ def filter_users(users: List[Dict[str, Any]], query: Optional[str]) -> List[Dict
 
     return matched
 
+def filter_members(members: List[Dict[str, Any]], query: Optional[str]) -> List[Dict[str, Any]]:
+    """Filter members by principal name (case-insensitive substring match)."""
+    if not query:
+        return members
+    needle = query.lower()
+    return [m for m in members if needle in link_title(m, "principal").lower()]
+
 def filter_activities_by_author(activities: List[Dict[str, Any]], author_query: str) -> List[Dict[str, Any]]:
     """Filter activities to those whose author title matches the query (case-insensitive substring)."""
     needle = author_query.lower()
@@ -1312,6 +1330,26 @@ def print_users(users: List[Dict[str, Any]]) -> None:
         name = truncate(user_display_name(user), 32)
         login = truncate(str(user.get("login", "-") or "-"), 22)
         print(f"{user_id:<3}  {name:<32}  {login}")
+
+
+def print_members(members: List[Dict[str, Any]]) -> None:
+    """Print project members in tabular format."""
+    if not members:
+        print("No members found.")
+        return
+
+    print("ID   Name                              Roles")
+    print("---  --------------------------------  ----------------------------------------")
+    for item in members:
+        name = truncate(link_title(item, "principal"), 32)
+        href = item.get("_links", {}).get("principal", {}).get("href", "")
+        member_id = extract_numeric_id_from_href(href, "users")
+        member_id_str = str(member_id) if member_id is not None else "?"
+        roles = ", ".join(
+            r.get("title", "-") for r in item.get("_links", {}).get("roles", [])
+        )
+        roles = truncate(roles, 40)
+        print(f"{member_id_str:<3}  {name:<32}  {roles}")
 
 
 def print_work_package_detail(work_package: Dict[str, Any]) -> None:
@@ -1761,6 +1799,19 @@ def command_list_users(args: argparse.Namespace) -> None:
     maybe_print_json(filtered, args.debug_json)
 
 
+def command_list_project_members(args: argparse.Namespace) -> None:
+    project_ref = require_project(args.project)
+    client = build_client_from_env()
+    project = client.resolve_project(project_ref)
+    project_id = project["id"]
+    project_name = project.get("name") or project.get("identifier", project_ref)
+    members = client.get_project_memberships(project_id, limit=args.limit)
+    filtered = filter_members(members, args.query)
+    print(f"Project: {project_name}")
+    print_members(filtered)
+    maybe_print_json(filtered, args.debug_json)
+
+
 def command_list_relations(args: argparse.Namespace) -> None:
     client = build_client_from_env()
     relations = client.list_work_package_relations(args.id, limit=args.limit)
@@ -2168,6 +2219,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of users to fetch (default: 200).",
     )
     parser_users.set_defaults(func=command_list_users)
+
+    parser_members = subparsers.add_parser(
+        "list-project-members",
+        help="List members of a project with their roles.",
+        description="Fetch and display project memberships from OpenProject.",
+    )
+    parser_members.add_argument(
+        "--project",
+        help="Project ID or identifier. Optional when OPENPROJECT_DEFAULT_PROJECT is set.",
+    )
+    parser_members.add_argument(
+        "--query",
+        help="Optional case-insensitive substring filter on member name.",
+    )
+    parser_members.add_argument(
+        "--limit",
+        type=int,
+        default=200,
+        help="Maximum number of members to fetch (default: 200).",
+    )
+    parser_members.set_defaults(func=command_list_project_members)
 
     parser_relations = subparsers.add_parser(
         "list-relations",
