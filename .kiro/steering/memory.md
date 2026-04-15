@@ -17,6 +17,7 @@ Observations from building and implementing specs in this project. Use these to 
 - Property tests run via `pytest`, unit tests via `unittest discover`. Both coexist in `tests/`.
 - When capturing stdout in tests, use `io.StringIO` + `contextlib.redirect_stdout`.
 - Mock `build_client_from_env` to return a `MagicMock` client for command-level tests. Mock `_collect_collection` on client instances for client-method tests.
+- For dynamically-loaded CLI modules, use `patch.object(cli, 'build_client_from_env')` instead of `patch('openproject_cli.build_client_from_env')`. The string-based patch path doesn't work because the module isn't in `sys.modules` under a normal name.
 
 ## Code Placement
 
@@ -26,9 +27,11 @@ Observations from building and implementing specs in this project. Use these to 
 - New command functions go near related existing commands (e.g., `command_list_comments` after `command_add_comment`).
 - Subparser registration in `build_parser()` should mirror the command function ordering.
 - `--debug-json` is a global parser argument — don't re-add it to subparsers.
+- When adding an optional `--parent`-style flag that only applies to some subparsers, use `getattr(args, "parent", None)` in the command function instead of `args.parent` directly. This avoids `AttributeError` if the attribute isn't set on the namespace (e.g., when the arg is registered on one subparser but the command function is shared or tested in isolation).
 
 ## Subagent Delegation
 
+- For "run all tasks" sessions, handle simple implementation tasks (helpers, client method extensions, formatter tweaks, argparse registration) directly as orchestrator and only delegate test-writing tasks to subagents. This is significantly faster than delegating every task — the parent-child feature completed in one pass with zero retries using this approach.
 - Subagents sometimes create code eagerly in earlier tasks. Always check if code already exists before delegating a task — avoids duplicates.
 - Watch for nested class bugs: a subagent once placed a test class inside another test class, making it invisible to `unittest discover`. Always verify test discovery count after adding tests.
 - Keep subagent prompts specific: include exact line numbers, function signatures, and the surrounding code context. Vague prompts lead to misplaced code.
@@ -68,6 +71,7 @@ Observations from building and implementing specs in this project. Use these to 
 - Community forums may report version-specific bugs (e.g., PATCH on activities returning 500 in some versions). Requirements should account for graceful error handling on endpoints that may behave inconsistently across OpenProject versions.
 - PATCH `/api/v3/activities/{id}` expects `{"comment": "plain string"}` — NOT the formattable object `{"comment": {"raw": "..."}}`. The formattable object is what the API *returns*, but the PATCH request body wants a plain string. Sending the object format returns 400 "comment is invalid". Discovered via live testing with multiple payload variants.
 - When debugging API payload issues, write a temp script that tries multiple payload formats in one run (plain string, formattable object, with/without version, different content types). This is faster than iterating one-at-a-time.
+- Setting a non-existent parent work package ID returns 422 ("Multiple field constraints have been violated"), NOT 404. The design doc for parent-child assumed 404 but the API treats it as a validation error. Error handling tests should use 422 for this case.
 
 ## Property Test Gotchas
 
@@ -76,6 +80,15 @@ Observations from building and implementing specs in this project. Use these to 
 ## API Path Prefix Pitfall
 
 - `OpenProjectClient._request` already prepends `/api/v3` to all paths. When writing new client methods that call `_collect_collection`, use bare paths like `/memberships` — NOT `/api/v3/memberships`. The subagent used the full `/api/v3/memberships` path for `get_project_memberships`, which would have produced a double-prefix URL (`/api/v3/api/v3/memberships`). Always review subagent-generated client method paths against the `_request` implementation before marking the task complete.
+
+## Design Review
+
+- When extending an existing command with a new optional flag (e.g., adding `--parent` to `update-work-package`), check for "at least one field provided" guard logic in the command function. The guard tuple must include the new `args.<field>` or the new flag alone will be rejected. The design doc should call this out explicitly so the task list doesn't miss it.
+
+## Spec Workflow — Pre-Spec Investigation
+
+- Users may ask to verify current CLI capabilities before committing to a spec type (feature vs. bugfix). Use `readCode` to inspect relevant methods, commands, and formatters before presenting the spec type choice. This avoids speccing something that already exists or mischaracterizing the work.
+- When investigating, check all four layers: client method, command function, CLI parser registration, and display/formatter. A feature can be partially implemented (e.g., API method exists but no CLI flag).
 
 ## Spec Workflow — Multi-Phase Delegation
 

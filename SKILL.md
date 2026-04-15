@@ -39,17 +39,19 @@ Use `python scripts/openproject_cli.py <command> [args]`.
 - `list-work-packages --project <id|identifier> [--status ...] [--assignee ...] [--limit N]`
   - List work packages with WP ID, subject, status, assignee, and updated date.
   - Applies filtering conservatively (API-side where practical, otherwise client-side).
-- `create-work-package --project <id|identifier> --subject "..." [--type Task] [--description "..."]`
+- `create-work-package --project <id|identifier> --subject "..." [--type Task] [--description "..."] [--parent <wp_id>]`
   - Create a work package and print created ID and subject.
   - Resolves type by name with helpful errors if type is unknown.
+  - `--parent` optionally sets the parent work package by ID, placing the new work package in a hierarchy.
 - `update-work-package-status --id <wp_id> --status "..."`
   - Resolve status by name (case-insensitive) and patch the work package.
   - Prints confirmation including WP ID and resulting status.
 - `get-work-package --id <wp_id>`
   - Fetch full details for a single work package (status/type/priority/assignee/dates/description).
   - Displays a comment count showing how many user comments exist on the work package.
-- `update-work-package --id <wp_id> [--subject ...] [--description ...] [--status ...] [--assignee ...] [--priority ...] [--type ...] [--start-date YYYY-MM-DD] [--due-date YYYY-MM-DD]`
+- `update-work-package --id <wp_id> [--subject ...] [--description ...] [--status ...] [--assignee ...] [--priority ...] [--type ...] [--start-date YYYY-MM-DD] [--due-date YYYY-MM-DD] [--parent <wp_id|none>]`
   - Patch one or more mutable fields in a single call using transition-safe status resolution.
+  - `--parent` sets or changes the parent work package. Use `--parent none` to remove the parent.
 - `add-comment --id <wp_id> --comment "..."`
   - Best-effort comment creation using OpenProject API v3.
   - Returns a clear message when endpoint behavior differs by version/config.
@@ -79,6 +81,10 @@ Use `python scripts/openproject_cli.py <command> [args]`.
   - `--limit N` caps the number of memberships fetched (default: 200).
 - `list-relations --id <wp_id> [--limit N]`
   - List relations for one work package.
+- `list-children --id <wp_id> [--limit N]`
+  - List direct children of a work package.
+  - Displays child work packages with ID, subject, status, assignee, and parent.
+  - `--limit N` caps the number of children returned (default: 50).
 - `create-relation --from-id <wp_id> --to-id <wp_id> --type <relation_type> [--description ...] [--lag N]`
   - Create a work package relation (non-destructive link operation).
 - `weekly-summary --project <id|identifier> [--output path.md]`
@@ -166,6 +172,14 @@ playwright install chromium
 
 - Use `list-relations` to inspect dependencies and ordering constraints.
 - Use `create-relation` for new links (`relates`, `blocks`, `follows`, etc.) and include `--lag` only when needed.
+
+### Parent-child hierarchy
+
+- Use `--parent` on `create-work-package` to place new work packages under a parent immediately.
+- Use `--parent` on `update-work-package` to move a work package under a different parent.
+- Use `--parent none` on `update-work-package` to detach a work package from its parent.
+- Use `list-children` to see what sub-items exist under a parent work package.
+- Parent-child relationships represent containment hierarchy (e.g., Epic → Task), distinct from relations which model lateral dependencies.
 
 ### Weekly status summary
 

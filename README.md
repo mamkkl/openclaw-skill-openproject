@@ -181,9 +181,9 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `list-projects` | List visible projects | none |
 | `list-work-packages` | List project work packages with optional filters | `--project`, `--status`, `--assignee`, `--limit` |
 | `get-work-package` | Read one work package in detail | `--id` |
-| `create-work-package` | Create a new work package | `--project`, `--subject`, `--type`, `--description` |
+| `create-work-package` | Create a new work package | `--project`, `--subject`, `--type`, `--description`, `--parent` |
 | `update-work-package-status` | Transition a work package status | `--id`, `--status` |
-| `update-work-package` | Update multiple work package fields | `--id` plus any of `--subject`, `--description`, `--status`, `--assignee`, `--priority`, `--type`, `--start-date`, `--due-date` |
+| `update-work-package` | Update multiple work package fields | `--id` plus any of `--subject`, `--description`, `--status`, `--assignee`, `--priority`, `--type`, `--start-date`, `--due-date`, `--parent` |
 | `add-comment` | Add note/comment to work package | `--id`, `--comment` |
 | `list-comments` | List comments on a work package | `--id`, optional `--all`, `--author`, `--limit` |
 | `update-comment` | Update text of an existing comment | `--id` (activity ID), `--comment` |
@@ -193,6 +193,7 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `list-users` | List visible users | optional `--query`, `--limit` |
 | `list-project-members` | List project members with roles | `--project`, optional `--query`, `--limit` |
 | `list-relations` | List relations for one work package | `--id`, optional `--limit` |
+| `list-children` | List direct children of a work package | `--id`, optional `--limit` |
 | `create-relation` | Create a relation between work packages | `--from-id`, `--to-id`, `--type`, optional `--description`, `--lag` |
 | `weekly-summary` | Generate compact markdown summary | `--project`, `--output` |
 | `log-decision` | Write decision log markdown file | `--project`, `--title`, `--decision`, optional context fields |

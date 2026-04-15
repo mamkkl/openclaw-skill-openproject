@@ -572,6 +572,7 @@ class OpenProjectClient:
         subject: str,
         type_name: str = "Task",
         description: Optional[str] = None,
+        parent_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create a work package in a project."""
         project_id = int(project["id"])
@@ -587,6 +588,8 @@ class OpenProjectClient:
         }
         if description:
             payload["description"] = {"raw": description}
+        if parent_id is not None:
+            payload["_links"]["parent"] = {"href": build_parent_href(str(parent_id))}
 
         return self._request("POST", "/work_packages", payload=payload, expected_statuses=(200, 201))
 
@@ -719,6 +722,7 @@ class OpenProjectClient:
         type_name: Optional[str] = None,
         start_date: Optional[str] = None,
         due_date: Optional[str] = None,
+        parent_ref: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update mutable work package fields in a single PATCH call."""
         work_package = self.get_work_package(work_package_id)
@@ -756,6 +760,9 @@ class OpenProjectClient:
             project_id = extract_numeric_id_from_href(project_href, "projects")
             _, resolved_type_href = self.resolve_type(project_id, type_name)
             link_updates["type"] = {"href": resolved_type_href}
+
+        if parent_ref is not None:
+            link_updates["parent"] = {"href": build_parent_href(parent_ref)}
 
         if link_updates:
             payload["_links"] = link_updates
@@ -935,6 +942,15 @@ class OpenProjectClient:
             "POST", "/notifications/read_ian", expected_statuses=(204,)
         )
 
+    def list_children(self, work_package_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """List direct children of a work package."""
+        filters = json.dumps([{"parent": {"operator": "=", "values": [str(work_package_id)]}}])
+        return self._collect_collection(
+            "/work_packages",
+            params={"filters": filters},
+            limit=limit,
+        )
+
 
 def extract_error_message(response: requests.Response) -> str:
     """Extract a readable error message from an OpenProject error payload."""
@@ -1092,6 +1108,41 @@ def extract_numeric_id_from_href(href: str, resource: str) -> Optional[int]:
     if not match:
         return None
     return int(match.group(1))
+
+
+def build_parent_href(value: str) -> Optional[str]:
+    """Convert a parent value to an API href or None.
+
+    Returns ``/api/v3/work_packages/{id}`` for positive integer strings,
+    ``None`` for case-insensitive ``"none"``, and raises ``ValueError``
+    otherwise.
+    """
+    if value.lower() == "none":
+        return None
+    try:
+        int_val = int(value)
+    except ValueError:
+        raise ValueError(f"{value!r} is not a valid parent value")
+    if int_val <= 0:
+        raise ValueError(f"{value!r} is not a positive integer")
+    return f"{API_PREFIX}/work_packages/{int_val}"
+
+
+def parent_id_or_none(value: str) -> str:
+    """Argparse *type* function accepting a positive integer or 'none'."""
+    if value.lower() == "none":
+        return value
+    try:
+        int_val = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a valid parent (use a positive integer or 'none')"
+        )
+    if int_val <= 0:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a positive integer"
+        )
+    return value
 
 
 def extract_formattable_text(value: Any) -> str:
@@ -1261,15 +1312,17 @@ def print_work_packages(work_packages: List[Dict[str, Any]]) -> None:
         print("No matching work packages found.")
         return
 
-    print("WP ID   Subject                              Status         Assignee        Updated")
-    print("-----   -----------------------------------  -------------  --------------  ----------")
+    print("WP ID   Subject                              Status         Assignee        Parent  Updated")
+    print("-----   -----------------------------------  -------------  --------------  ------  ----------")
     for wp in work_packages:
         wp_id = str(wp.get("id", "?"))
         subject = truncate(str(wp.get("subject", "(no subject)")), 35)
         status = truncate(link_title(wp, "status", "-"), 13)
         assignee = truncate(link_title(wp, "assignee", "Unassigned"), 14)
+        parent_href = nested_get(wp, ["_links", "parent", "href"], None)
+        parent_col = str(extract_numeric_id_from_href(parent_href, "work_packages")) if parent_href else "-"
         updated = format_date(str(wp.get("updatedAt", "")))
-        print(f"{wp_id:<5}   {subject:<35}  {status:<13}  {assignee:<14}  {updated}")
+        print(f"{wp_id:<5}   {subject:<35}  {status:<13}  {assignee:<14}  {parent_col:<6}  {updated}")
 
 
 def print_statuses(statuses: List[Dict[str, Any]]) -> None:
@@ -1379,6 +1432,15 @@ def print_work_package_detail(work_package: Dict[str, Any]) -> None:
     print(f"Created: {created}")
     print(f"Updated: {updated}")
     print(f"Lock version: {lock_version}")
+
+    parent_href = nested_get(work_package, ["_links", "parent", "href"], None)
+    if parent_href:
+        parent_id = extract_numeric_id_from_href(parent_href, "work_packages")
+        parent_title = nested_get(work_package, ["_links", "parent", "title"], "")
+        if parent_title:
+            print(f"Parent: #{parent_id} — {parent_title}")
+        else:
+            print(f"Parent: #{parent_id}")
 
     description = extract_formattable_text(work_package.get("description"))
     if description.strip():
@@ -1629,11 +1691,16 @@ def command_create_work_package(args: argparse.Namespace) -> None:
         subject=args.subject,
         type_name=args.type,
         description=args.description,
+        parent_id=getattr(args, "parent", None),
     )
 
     wp_id = created.get("id", "?")
     subject = created.get("subject", args.subject)
-    print(f"Created work package #{wp_id}: {subject}")
+    parent_id = getattr(args, "parent", None)
+    if parent_id is not None:
+        print(f"Created work package #{wp_id}: {subject} (parent: #{parent_id})")
+    else:
+        print(f"Created work package #{wp_id}: {subject}")
     maybe_print_json(created, args.debug_json)
 
 
@@ -1717,6 +1784,7 @@ def command_get_work_package(args: argparse.Namespace) -> None:
 
 
 def command_update_work_package(args: argparse.Namespace) -> None:
+    parent_val = getattr(args, "parent", None)
     if not any(
         value is not None
         for value in (
@@ -1728,6 +1796,7 @@ def command_update_work_package(args: argparse.Namespace) -> None:
             args.type,
             args.start_date,
             args.due_date,
+            parent_val,
         )
     ):
         raise OpenProjectError("Provide at least one field to update.")
@@ -1746,10 +1815,14 @@ def command_update_work_package(args: argparse.Namespace) -> None:
         type_name=args.type,
         start_date=start_date,
         due_date=due_date,
+        parent_ref=parent_val,
     )
 
     wp_id = updated.get("id", args.id)
-    print(f"Updated work package #{wp_id}.")
+    if parent_val is not None and parent_val.lower() == "none":
+        print(f"Updated work package #{wp_id}. Parent removed.")
+    else:
+        print(f"Updated work package #{wp_id}.")
     print_work_package_detail(updated)
     maybe_print_json(updated, args.debug_json)
 
@@ -1818,6 +1891,16 @@ def command_list_relations(args: argparse.Namespace) -> None:
     print(f"Work package #{args.id}")
     print_relations(relations)
     maybe_print_json(relations, args.debug_json)
+
+
+def command_list_children(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    children = client.list_children(args.id, limit=args.limit)
+    if not children:
+        print(f"No children found for work package #{args.id}.")
+        return
+    print_work_packages(children)
+    maybe_print_json(children, args.debug_json)
 
 
 def command_create_relation(args: argparse.Namespace) -> None:
@@ -2089,6 +2172,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--description",
         help="Optional work package description.",
     )
+    parser_create_wp.add_argument(
+        "--parent",
+        type=positive_int,
+        help="Optional parent work package ID.",
+    )
     parser_create_wp.set_defaults(func=command_create_work_package)
 
     parser_update_status = subparsers.add_parser(
@@ -2176,6 +2264,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser_update_wp.add_argument("--type", help="Work package type name.")
     parser_update_wp.add_argument("--start-date", help="Start date (YYYY-MM-DD).")
     parser_update_wp.add_argument("--due-date", help="Due date (YYYY-MM-DD).")
+    parser_update_wp.add_argument(
+        "--parent",
+        type=parent_id_or_none,
+        help="Parent work package ID, or 'none' to remove parent.",
+    )
     parser_update_wp.set_defaults(func=command_update_work_package)
 
     parser_statuses = subparsers.add_parser(
@@ -2254,6 +2347,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of relations to fetch (default: 100).",
     )
     parser_relations.set_defaults(func=command_list_relations)
+
+    parser_list_children = subparsers.add_parser(
+        "list-children",
+        help="List direct children of a work package.",
+        description="Fetch and display child work packages for a given parent.",
+    )
+    parser_list_children.add_argument(
+        "--id", type=positive_int, required=True, help="Parent work package ID."
+    )
+    parser_list_children.add_argument(
+        "--limit",
+        type=positive_int,
+        default=50,
+        help="Maximum number of children to fetch (default: 50).",
+    )
+    parser_list_children.set_defaults(func=command_list_children)
 
     parser_create_relation = subparsers.add_parser(
         "create-relation",
