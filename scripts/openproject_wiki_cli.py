@@ -69,18 +69,30 @@ def _launch_and_login(pw, *, visible: bool = False):
     # Navigate to login
     page.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=60000)
 
-    # OpenProject 17 may show a "Sign in" button that opens the login form
-    username_field = page.query_selector("#username-pulldown")
-    if not username_field or not username_field.is_visible():
+    # Wait for the login form to render (Angular app may take a moment after DOM load)
+    # Try the username field first, then fall back to the "Sign in" button
+    try:
+        page.wait_for_selector("#username-pulldown", state="visible", timeout=15000)
+    except Exception:
+        # OpenProject 17 may show a "Sign in" button that opens the login form
         signin_btn = page.locator("text=Sign in").first
-        if signin_btn.is_visible():
+        try:
+            signin_btn.wait_for(state="visible", timeout=10000)
             signin_btn.click()
             page.wait_for_selector("#username-pulldown", state="visible", timeout=10000)
+        except Exception:
+            browser.close()
+            raise WikiError("Could not find login form. Check OPENPROJECT_BASE_URL.")
 
     page.fill("#username-pulldown", username)
     page.fill("#password-pulldown", password)
     # The login form lives inside a dialog overlay — use the nav dialog's submit button
-    page.locator("dialog:visible").get_by_role("button", name="Sign in").click()
+    submit_btn = page.locator("dialog:visible").get_by_role("button", name="Sign in")
+    if submit_btn.is_visible():
+        submit_btn.click()
+    else:
+        # Fallback: try any visible Sign in / Log in button
+        page.locator("button:visible, input[type='submit']:visible").filter(has_text="Sign in").first.click()
     page.wait_for_load_state("domcontentloaded")
     time.sleep(2)
 
