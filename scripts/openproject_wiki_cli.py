@@ -47,7 +47,15 @@ def _launch_and_login(pw, *, visible: bool = False):
     password = _require_env("OPENPROJECT_WIKI_PASSWORD")
 
     try:
-        browser = pw.chromium.launch(headless=not visible)
+        browser = pw.chromium.launch(
+            headless=not visible,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+            ],
+        )
     except Exception as exc:
         if "Executable doesn't exist" in str(exc) or "browserType.launch" in str(exc):
             raise WikiError(
@@ -59,7 +67,7 @@ def _launch_and_login(pw, *, visible: bool = False):
     page.set_default_navigation_timeout(60000)
 
     # Navigate to login
-    page.goto(f"{base_url}/login", wait_until="networkidle", timeout=60000)
+    page.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=60000)
 
     # OpenProject 17 may show a "Sign in" button that opens the login form
     username_field = page.query_selector("#username-pulldown")
@@ -73,12 +81,12 @@ def _launch_and_login(pw, *, visible: bool = False):
     page.fill("#password-pulldown", password)
     # The login form lives inside a dialog overlay — use the nav dialog's submit button
     page.locator("dialog:visible").get_by_role("button", name="Sign in").click()
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("domcontentloaded")
     time.sleep(2)
 
     # Redirect after login may not work — force navigate to home
     if "/login" in page.url:
-        page.goto(base_url, wait_until="networkidle")
+        page.goto(base_url, wait_until="domcontentloaded")
         time.sleep(2)
 
     # Final check — if still on login, credentials are wrong
@@ -227,7 +235,7 @@ def cmd_write_wiki(args: argparse.Namespace) -> None:
         browser, page = _launch_and_login(pw, visible=getattr(args, "visible", False))
         try:
             slug = title.replace(" ", "_")
-            page.goto(f"{base_url}/projects/{project}/wiki/{slug}", wait_until="networkidle")
+            page.goto(f"{base_url}/projects/{project}/wiki/{slug}", wait_until="domcontentloaded")
             time.sleep(2)
 
             page_title = page.title() or ""
@@ -242,7 +250,7 @@ def cmd_write_wiki(args: argparse.Namespace) -> None:
             else:
                 # Page exists — navigate directly to the edit URL
                 edit_url = f"{base_url}/projects/{project}/wiki/{slug}/edit"
-                page.goto(edit_url, wait_until="networkidle")
+                page.goto(edit_url, wait_until="domcontentloaded")
                 time.sleep(3)
 
             # Fill CKEditor content — try multiple selectors
@@ -287,7 +295,7 @@ def cmd_write_wiki(args: argparse.Namespace) -> None:
             save_btn = page.locator("button", has_text="Save").first
             if save_btn.is_visible():
                 save_btn.click()
-                page.wait_for_load_state("networkidle")
+                page.wait_for_load_state("domcontentloaded")
                 time.sleep(2)
                 print(f"Wiki page '{title}' saved successfully.")
                 print(f"URL: {base_url}/projects/{project}/wiki/{slug}")
@@ -322,7 +330,7 @@ def cmd_read_wiki(args: argparse.Namespace) -> None:
     with sync_playwright() as pw:
         browser, page = _launch_and_login(pw, visible=getattr(args, "visible", False))
         try:
-            page.goto(f"{base_url}/projects/{project}/wiki/{slug}", wait_until="networkidle")
+            page.goto(f"{base_url}/projects/{project}/wiki/{slug}", wait_until="domcontentloaded")
             time.sleep(1)
 
             # Extract wiki content
@@ -360,7 +368,7 @@ def cmd_list_wiki(args: argparse.Namespace) -> None:
     with sync_playwright() as pw:
         browser, page = _launch_and_login(pw, visible=getattr(args, "visible", False))
         try:
-            page.goto(f"{base_url}/projects/{project}/wiki", wait_until="networkidle")
+            page.goto(f"{base_url}/projects/{project}/wiki", wait_until="domcontentloaded")
             time.sleep(1)
 
             # Look for the page index / table of contents
