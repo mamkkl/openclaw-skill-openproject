@@ -106,6 +106,15 @@ Use `python scripts/openproject_cli.py <command> [args]`.
   - Mark a notification as unread. Prints confirmation with notification ID.
 - `read-all-notifications`
   - Mark all notifications as read in one operation.
+- `upload-attachment --id <wp_id> --file <path> [--file <path> ...] [--description "..."]`
+  - Upload one or more files as attachments to a work package.
+  - Validates each file path before uploading (skips missing files and directories).
+  - Prints confirmation per file with attachment ID, file name, and size.
+- `list-attachments --id <wp_id>`
+  - List all attachments on a work package with ID, file name, size, content type, and creation date.
+- `download-attachment --id <attachment_id> [--output <path>]`
+  - Download an attachment by its ID and save to a local file.
+  - Defaults to the original file name in the current directory when `--output` is omitted.
 
 Wiki commands may exist in the CLI for legacy compatibility, but they are out of scope for this skill and should not be used in normal workflows.
 
@@ -214,6 +223,15 @@ playwright install chromium
 - Use `read-notification` to acknowledge a notification after reviewing it.
 - Use `unread-notification` to flag a notification for later follow-up.
 - Use `read-all-notifications` to clear notification backlog in bulk.
+
+### Attachments
+
+- Use `upload-attachment` to attach files (documents, screenshots, logs) to a work package.
+- Use multiple `--file` flags to upload several files in one command.
+- Use `--description` to add context to uploaded files.
+- Use `list-attachments` to see what files are attached to a work package before downloading.
+- Use `download-attachment` with the attachment ID (from `list-attachments`) to retrieve a file.
+- Use `--output` to control where downloaded files are saved; omit it to use the original file name.
 
 ## Output Style
 

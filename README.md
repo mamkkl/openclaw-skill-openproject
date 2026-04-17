@@ -202,6 +202,9 @@ python3 scripts/openproject_cli.py <subcommand> [options]
 | `read-notification` | Mark a notification as read | `--id` |
 | `unread-notification` | Mark a notification as unread | `--id` |
 | `read-all-notifications` | Mark all notifications as read | none |
+| `upload-attachment` | Upload file(s) to a work package | `--id`, `--file` (repeatable), optional `--description` |
+| `list-attachments` | List attachments on a work package | `--id` |
+| `download-attachment` | Download an attachment by ID | `--id`, optional `--output` |
 
 Note: the CLI may still contain legacy wiki subcommands for compatibility experiments, but they are not part of the supported skill command set.
 

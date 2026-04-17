@@ -43,6 +43,11 @@ Observations from building and implementing specs in this project. Use these to 
 - Property tests with `@settings(max_examples=100)` take ~20s on this machine. Budget accordingly.
 - Use `from_regex` strategies instead of `st.text().filter(...)` in Hypothesis — much faster generation, avoids health check warnings.
 
+## Session Resilience
+
+- When a "run all tasks" session is interrupted (user says "retry"), always re-read `tasks.md` to check actual task statuses before resuming. Don't assume the in-memory state matches the file — subagent task status updates may not have persisted if the session was cut short between the subagent completing and the orchestrator confirming.
+- After a retry, verify subagent-created files actually exist and pass tests before re-delegating. The subagent may have written the file successfully even if its task status updates were lost. Re-delegating would overwrite or duplicate work.
+
 ## Subagent Batching
 
 - When multiple tasks share the same output file and strategies (e.g., property tests 2.4–2.10), batch them into a single subagent call. Much faster and avoids merge conflicts in the same file.
@@ -63,15 +68,22 @@ Observations from building and implementing specs in this project. Use these to 
 - After adding a new CLI command, always update `SKILL.md`: add the command to Supported Operations, update any modified command descriptions, and add agent behavior guidance if applicable.
 - Check if `README.md` also needs corresponding updates (per steering rule in `structure.md`).
 - When adding a new command to README's Command Reference table, audit the full table for previously missing commands. The `list-comments` command was missing from the table despite being implemented in an earlier feature — caught only when adding `update-comment`.
+- After all unit/property tests pass, run a quick e2e smoke test against the live OpenProject instance for any feature that touches HTTP request mechanics (custom headers, multipart, non-JSON payloads). Mocked sessions don't enforce header semantics, so bugs like the `Content-Type` override in multipart uploads only surface against a real server. The attachment upload passed all 26 tests but returned 400 on the live instance.
 
 ## API Verification
 
 - Always verify OpenProject API endpoint availability against the official docs (https://www.openproject.org/docs/api/endpoints/) before writing requirements that depend on them. Don't assume endpoints exist from memory alone.
+- The official docs URL is `https://www.openproject.org/docs/api/endpoints/<resource>/` (note: `docs.openproject.org` does not resolve — always use `www.openproject.org/docs/...`).
 - Check `_links` on API resource examples — OpenProject uses HAL hypermedia controls (e.g., `_links.update` with `method: "patch"`) to advertise available operations. The presence of these links is permission-dependent.
+- The attachments API uses `multipart/form-data` with two parts (`metadata` as JSON, `file` as binary) — NOT the usual `application/json` that `_request` sends. Any feature involving file uploads will need a separate upload method on `OpenProjectClient` that uses `requests`' `files=` parameter instead of `json=`.
 - Community forums may report version-specific bugs (e.g., PATCH on activities returning 500 in some versions). Requirements should account for graceful error handling on endpoints that may behave inconsistently across OpenProject versions.
 - PATCH `/api/v3/activities/{id}` expects `{"comment": "plain string"}` — NOT the formattable object `{"comment": {"raw": "..."}}`. The formattable object is what the API *returns*, but the PATCH request body wants a plain string. Sending the object format returns 400 "comment is invalid". Discovered via live testing with multiple payload variants.
 - When debugging API payload issues, write a temp script that tries multiple payload formats in one run (plain string, formattable object, with/without version, different content types). This is faster than iterating one-at-a-time.
 - Setting a non-existent parent work package ID returns 422 ("Multiple field constraints have been violated"), NOT 404. The design doc for parent-child assumed 404 but the API treats it as a validation error. Error handling tests should use 422 for this case.
+
+## Session Default Headers vs Multipart Upload
+
+- `OpenProjectClient.__init__` sets `Content-Type: application/json` as a session-level default header. When using `session.post(url, files=...)` for multipart uploads, `requests` needs to auto-generate its own `Content-Type: multipart/form-data; boundary=...` header — but the session default overrides it, causing the server to reject the request with 400 ("could not be parsed as JSON"). Fix: temporarily pop `Content-Type` from `session.headers` before the multipart POST, then restore it in a `finally` block. This was caught during e2e testing against a live instance — unit tests with mocked sessions don't detect this because the mock doesn't enforce header semantics.
 
 ## Property Test Gotchas
 
@@ -84,6 +96,8 @@ Observations from building and implementing specs in this project. Use these to 
 ## Design Review
 
 - When extending an existing command with a new optional flag (e.g., adding `--parent` to `update-work-package`), check for "at least one field provided" guard logic in the command function. The guard tuple must include the new `args.<field>` or the new flag alone will be rejected. The design doc should call this out explicitly so the task list doesn't miss it.
+- Subagent-generated designs default to `type=int` for `--id` arguments, but this project uses `type=positive_int` to reject zero/negative IDs at the argparse level. Always check that new subparser `--id` args use `positive_int`, not bare `int`.
+- When a design has batch operations (e.g., uploading multiple files), explicitly distinguish "abort all" errors (404/403 — wrong WP or no permission) from "skip and continue" errors (per-file upload failure). The subagent's initial design treated all failures the same way.
 
 ## Spec Workflow — Pre-Spec Investigation
 

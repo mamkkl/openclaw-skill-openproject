@@ -951,6 +951,61 @@ class OpenProjectClient:
             limit=limit,
         )
 
+    def upload_attachment(
+        self, work_package_id: int, file_path: str, description: str = ""
+    ) -> Dict[str, Any]:
+        """Upload a file attachment to a work package (multipart/form-data)."""
+        file_name = os.path.basename(file_path)
+        metadata = json.dumps({"fileName": file_name, "description": description})
+        url = f"{self.base_url}/api/v3/work_packages/{work_package_id}/attachments"
+        # Remove session Content-Type so requests can set multipart boundary
+        saved_ct = self.session.headers.pop("Content-Type", None)
+        try:
+            with open(file_path, "rb") as fh:
+                files = {
+                    "metadata": (None, metadata, "application/json"),
+                    "file": (file_name, fh, "application/octet-stream"),
+                }
+                response = self.session.post(url, files=files, timeout=REQUEST_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            raise OpenProjectError(f"Network error uploading attachment: {exc}")
+        finally:
+            if saved_ct is not None:
+                self.session.headers["Content-Type"] = saved_ct
+        if response.status_code not in (200, 201):
+            msg = extract_error_message(response)
+            raise OpenProjectError(
+                f"Upload failed ({response.status_code}): {msg}",
+                status_code=response.status_code,
+            )
+        return response.json()
+
+    def list_attachments(self, work_package_id: int) -> List[Dict[str, Any]]:
+        """List attachments for a work package."""
+        data = self._request("GET", f"/work_packages/{work_package_id}/attachments")
+        return extract_embedded_elements(data)
+
+    def get_attachment(self, attachment_id: int) -> Dict[str, Any]:
+        """Fetch metadata for a single attachment."""
+        return self._request("GET", f"/attachments/{attachment_id}")
+
+    def download_attachment_content(self, download_url: str) -> bytes:
+        """Download binary content from an attachment download location URL."""
+        if download_url.startswith("http://") or download_url.startswith("https://"):
+            url = download_url
+        else:
+            url = f"{self.base_url}{download_url}"
+        try:
+            response = self.session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            raise OpenProjectError(f"Network error downloading attachment: {exc}")
+        if response.status_code != 200:
+            raise OpenProjectError(
+                f"Download failed ({response.status_code})",
+                status_code=response.status_code,
+            )
+        return response.content
+
 
 def extract_error_message(response: requests.Response) -> str:
     """Extract a readable error message from an OpenProject error payload."""
@@ -1075,6 +1130,19 @@ def format_date(iso_timestamp: str) -> str:
     if len(iso_timestamp) >= 10:
         return iso_timestamp[:10]
     return iso_timestamp
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Convert byte count to human-readable string (B, KB, MB, GB)."""
+    if size_bytes <= 0:
+        return "0 B"
+    units = ("B", "KB", "MB", "GB")
+    value = float(size_bytes)
+    for unit in units[:-1]:
+        if value < 1024:
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} {units[-1]}"
 
 
 def truncate(value: str, max_length: int = 70) -> str:
@@ -1502,6 +1570,23 @@ def print_notification_detail(notification: Dict[str, Any]) -> None:
         print(f"Resource ID: {resource_id}")
     print(f"Project: {project}")
 
+
+
+def print_attachments(attachments: List[Dict[str, Any]]) -> None:
+    """Print attachment rows in a compact table."""
+    if not attachments:
+        print("No attachments found.")
+        return
+
+    print("ID      File Name                       Size        Content Type              Created")
+    print("------  ------------------------------  ----------  ------------------------  ----------")
+    for a in attachments:
+        aid = str(a.get("id", "?"))
+        fname = truncate(str(a.get("fileName", "-")), 30)
+        size = format_file_size(a.get("fileSize", 0))
+        ctype = truncate(str(a.get("contentType", "-")), 24)
+        created = format_date(str(a.get("createdAt", "")))
+        print(f"{aid:<6}  {fname:<30}  {size:<10}  {ctype:<24}  {created}")
 
 
 def print_wiki_pages(project_identifier: str, pages: List[Dict[str, Any]]) -> None:
@@ -2108,6 +2193,79 @@ def command_read_all_notifications(args: argparse.Namespace) -> None:
     maybe_print_json(result, args.debug_json)
 
 
+def command_upload_attachment(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    description = getattr(args, "description", None) or ""
+    valid_files: List[str] = []
+    for fp in args.file:
+        p = Path(fp)
+        if not p.exists():
+            print(f"Error: File not found: {fp}", file=sys.stderr)
+            continue
+        if not p.is_file():
+            print(f"Error: Path is a directory, not a file: {fp}", file=sys.stderr)
+            continue
+        if p.stat().st_size == 0:
+            print(f"Warning: File is empty (zero bytes): {fp}", file=sys.stderr)
+        valid_files.append(fp)
+
+    if not valid_files:
+        print("Error: No valid files to upload.", file=sys.stderr)
+        sys.exit(1)
+
+    any_failed = False
+    for fp in valid_files:
+        try:
+            result = client.upload_attachment(args.id, fp, description)
+            aid = result.get("id", "?")
+            fname = result.get("fileName", os.path.basename(fp))
+            fsize = format_file_size(result.get("fileSize", 0))
+            print(f"Uploaded: #{aid} {fname} ({fsize})")
+            maybe_print_json(result, args.debug_json)
+        except OpenProjectError as exc:
+            if exc.status_code in (403, 404):
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(1)
+            print(f"Error uploading {fp}: {exc}", file=sys.stderr)
+            any_failed = True
+
+    if any_failed:
+        sys.exit(1)
+
+
+def command_list_attachments(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    data = client._request("GET", f"/work_packages/{args.id}/attachments")
+    attachments = extract_embedded_elements(data)
+    if not attachments:
+        print(f"No attachments found for work package #{args.id}.")
+    else:
+        print_attachments(attachments)
+    maybe_print_json(data, args.debug_json)
+
+
+def command_download_attachment(args: argparse.Namespace) -> None:
+    client = build_client_from_env()
+    attachment = client.get_attachment(args.id)
+    download_url = nested_get(attachment, ("_links", "downloadLocation", "href"), "")
+    if not download_url:
+        print("Error: No download URL found in attachment metadata.", file=sys.stderr)
+        sys.exit(1)
+
+    file_name = str(attachment.get("fileName", f"attachment-{args.id}"))
+    output_path = getattr(args, "output", None) or file_name
+    output = Path(output_path)
+
+    if not output.parent.exists():
+        print(f"Error: Output directory does not exist: {output.parent}", file=sys.stderr)
+        sys.exit(1)
+
+    content = client.download_attachment_content(download_url)
+    output.write_bytes(content)
+    print(f"Downloaded: {file_name} ({len(content)} bytes) -> {output}")
+    maybe_print_json(attachment, args.debug_json)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser and subcommands."""
     parser = argparse.ArgumentParser(
@@ -2546,6 +2704,47 @@ def build_parser() -> argparse.ArgumentParser:
         description="Mark all in-app notifications as read in one operation.",
     )
     parser_read_all_notif.set_defaults(func=command_read_all_notifications)
+
+    # -- Attachment commands --
+
+    parser_upload_attach = subparsers.add_parser(
+        "upload-attachment",
+        help="Upload file(s) to a work package.",
+        description="Upload one or more files as attachments to a work package.",
+    )
+    parser_upload_attach.add_argument(
+        "--id", type=positive_int, required=True, help="Work package ID."
+    )
+    parser_upload_attach.add_argument(
+        "--file", action="append", required=True, help="File path to upload (repeatable)."
+    )
+    parser_upload_attach.add_argument(
+        "--description", help="Optional description applied to all uploaded files."
+    )
+    parser_upload_attach.set_defaults(func=command_upload_attachment)
+
+    parser_list_attach = subparsers.add_parser(
+        "list-attachments",
+        help="List attachments on a work package.",
+        description="Fetch and display attachments for a work package.",
+    )
+    parser_list_attach.add_argument(
+        "--id", type=positive_int, required=True, help="Work package ID."
+    )
+    parser_list_attach.set_defaults(func=command_list_attachments)
+
+    parser_download_attach = subparsers.add_parser(
+        "download-attachment",
+        help="Download an attachment by ID.",
+        description="Fetch attachment content and save to a local file.",
+    )
+    parser_download_attach.add_argument(
+        "--id", type=positive_int, required=True, help="Attachment ID."
+    )
+    parser_download_attach.add_argument(
+        "--output", help="Optional output file path. Defaults to original file name."
+    )
+    parser_download_attach.set_defaults(func=command_download_attachment)
 
     return parser
 
